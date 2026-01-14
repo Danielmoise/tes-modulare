@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { GeneratedContent, TemplateId, FormFieldConfig, TypographyConfig, Testimonial } from '../types';
 import { CheckCircle, Star, ShoppingCart, ArrowRight, ShieldCheck, Clock, Menu, User, CheckSquare, Truck, MessageCircle, X, Phone, MapPin, FileText, Loader2, Mail, Home, Image as ImageIcon, CreditCard, Banknote, ChevronDown, Zap, RefreshCcw, Check, Lock, Package, Eye, ThumbsUp, Flame, AlertTriangle, ShoppingBag, Bell, Maximize2, Gift } from 'lucide-react';
@@ -700,6 +699,12 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
     const hfConfig = content.htmlFormConfig || { showName: true, showProductLine: true, showTotalLine: true };
     const showHeader = content.formType !== 'html' || (hfConfig.showName || hfConfig.showProductLine || hfConfig.showTotalLine);
 
+    const getColSpanClass = (width?: number) => {
+        if (!width || width >= 12) return 'col-span-12';
+        if (width <= 1) return 'col-span-1';
+        return `col-span-${width}`;
+    };
+
     return (
         <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center">
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
@@ -820,6 +825,7 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
                                         <input type="radio" name="payment" value="cod" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} className="w-4 h-4 text-slate-900 accent-slate-900"/>
                                         <div className="ml-3 flex-1"><div className="flex items-center justify-between"><span className="font-bold text-slate-900 text-sm">{labels.cod}</span><Banknote className="w-5 h-5 text-slate-600" /></div></div>
                                     </label>
+                                    {/* FIX: Removed invalid setEditingMode call and fixed syntax error where radio input was not properly closed and contained other elements */}
                                     <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition-all ${paymentMethod === 'card' ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900' : 'border-slate-200 hover:border-slate-300'}`}>
                                         <input type="radio" name="payment" value="card" checked={paymentMethod === 'card'} onChange={() => setPaymentMethod('card')} className="w-4 h-4 text-slate-900 accent-slate-900"/>
                                         <div className="ml-3 flex-1">
@@ -847,36 +853,31 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
                             </div>
                             <div className="space-y-3">
                                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">{labels.shippingInfo}</label>
-                                {enabledFields.map((field) => {
-                                    // Special logic for side-by-side Address and Number
-                                    if (field.id === 'address_number' && enabledFields.some(f => f.id === 'address')) return null;
-                                    
-                                    if (field.id === 'address') {
-                                        const numField = enabledFields.find(f => f.id === 'address_number');
-                                        if (numField) {
-                                            return (
-                                                <div key="address-row" className="grid grid-cols-12 gap-3">
-                                                    <div className="col-span-9">
-                                                        <input type="text" required={field.required} placeholder={field.label} onChange={(e) => handleChange(field.id, e.target.value)} className={inputClass}/>
-                                                    </div>
-                                                    <div className="col-span-3">
-                                                        <input type="text" required={numField.required} placeholder={numField.label} onChange={(e) => handleChange(numField.id, e.target.value)} className={inputClass}/>
-                                                    </div>
-                                                </div>
-                                            );
-                                        }
-                                    }
-
-                                    return (
-                                        <div key={field.id}>
+                                <div className="grid grid-cols-12 gap-3">
+                                    {enabledFields.map((field) => (
+                                        <div key={field.id} className={getColSpanClass(field.width)}>
                                             {field.type === 'textarea' ? (
                                                     <textarea required={field.required} placeholder={field.label} onChange={(e) => handleChange(field.id, e.target.value)} className={`${inputClass} h-20 resize-none`}/>
                                             ) : (
-                                                <input type={field.type} required={field.required} placeholder={field.label} onChange={(e) => handleChange(field.id, e.target.value)} className={inputClass}/>
+                                                <input 
+                                                    type={field.type} 
+                                                    required={field.required} 
+                                                    placeholder={field.label} 
+                                                    maxLength={field.id === 'province' ? 2 : undefined}
+                                                    onChange={(e) => {
+                                                        let val = e.target.value;
+                                                        if (field.id === 'province') {
+                                                            val = val.toUpperCase().replace(/[^A-Z]/g, '');
+                                                            e.target.value = val;
+                                                        }
+                                                        handleChange(field.id, val);
+                                                    }} 
+                                                    className={`${inputClass} ${field.id === 'province' ? 'uppercase' : ''}`}
+                                                />
                                             )}
                                         </div>
-                                    );
-                                })}
+                                    ))}
+                                </div>
                             </div>
                             <div className="pt-2">
                                 <button type="submit" disabled={isLoading} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-lg py-4 rounded-xl shadow-lg transform active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-70">
@@ -977,7 +978,7 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
         const intervalTime = Math.max(2, spConfig.intervalSeconds) * 1000;
         const lang = content.language || 'Italiano';
         const culture = getCulturalData(lang);
-        const getRandomItem = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+        const getRandomItem = (arr: string[]) => arr[Math.floor(arr.length)];
         const interval = setInterval(() => {
             if (iterations >= maxIterations) { clearInterval(interval); return; }
             const name = getRandomItem(culture.names);
@@ -1042,19 +1043,39 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
                             </div>
                             <span className="text-[10px] text-slate-400 font-mono">{review.date}</span>
                         </div>
-                        {review.image && (
-                             <div 
-                                className="mb-3 rounded-lg overflow-hidden h-56 w-full bg-slate-100 cursor-pointer relative group"
-                                onClick={() => setActiveReviewImage(review.image || null)}
-                             >
-                                 <img src={review.image} alt="User Review" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                                 <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                    <div className="bg-white/90 backdrop-blur p-2 rounded-full shadow-lg">
-                                        <Maximize2 className="w-5 h-5 text-slate-900" />
+                        
+                        {/* Render Images: Priority to multiple images array */}
+                        {(review.images && review.images.length > 0) ? (
+                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide mb-3">
+                                {review.images.filter(img => img && img.trim() !== '').map((img, imgIdx) => (
+                                    <div 
+                                        key={imgIdx}
+                                        className="flex-shrink-0 rounded-lg overflow-hidden h-40 w-32 bg-slate-100 cursor-pointer relative group"
+                                        onClick={() => setActiveReviewImage(img)}
+                                    >
+                                        <img src={img} alt={`Review ${imgIdx}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                        <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                            <Maximize2 className="w-4 h-4 text-white" />
+                                        </div>
                                     </div>
+                                ))}
+                            </div>
+                        ) : (
+                            review.image && (
+                                 <div 
+                                    className="mb-3 rounded-lg overflow-hidden h-56 w-full bg-slate-100 cursor-pointer relative group"
+                                    onClick={() => setActiveReviewImage(review.image || null)}
+                                 >
+                                     <img src={review.image} alt="User Review" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                     <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                        <div className="bg-white/90 backdrop-blur p-2 rounded-full shadow-lg">
+                                            <Maximize2 className="w-5 h-5 text-slate-900" />
+                                        </div>
+                                     </div>
                                  </div>
-                             </div>
+                            )
                         )}
+
                         <h4 className="font-bold text-slate-900 text-base mb-2" style={h3Style}>{review.title || "Review"}</h4>
                         <p className="text-slate-600 italic mb-6 flex-grow leading-relaxed text-sm" style={bodyStyle}>"{review.text}"</p>
                         <div className="flex items-center gap-3 mt-auto border-t border-slate-200 pt-4">
@@ -1086,7 +1107,6 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
                     <div className="flex-1 w-full">
                         <ul className="space-y-3">
                             {content.boxContent.items.map((item, idx) => (
-                                // FIX: Added missing opening tag for li to resolve syntax errors.
                                 <li key={idx} className="flex items-center gap-3 bg-slate-50 p-3 rounded-lg border border-slate-100">
                                     <div className="bg-emerald-100 text-emerald-600 rounded-full p-1">
                                         <Check className="w-4 h-4" strokeWidth={3} />

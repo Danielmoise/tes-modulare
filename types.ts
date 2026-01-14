@@ -1,5 +1,4 @@
 
-
 export interface UserSession {
   id: string;
   email: string;
@@ -38,6 +37,7 @@ export interface FormFieldConfig {
   enabled: boolean;
   required: boolean;
   type: 'text' | 'tel' | 'email' | 'textarea';
+  width?: number; // Grid width from 1 to 12
 }
 
 export interface Testimonial {
@@ -47,7 +47,8 @@ export interface Testimonial {
   role: string;
   rating?: number;
   date?: string; // Date of the review
-  image?: string; // NEW: Image for the review
+  image?: string; // Legacy image field
+  images?: string[]; // NEW: Support for multiple images via URL
 }
 
 export interface TypographyConfig {

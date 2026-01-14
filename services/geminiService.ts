@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ProductDetails, GeneratedContent, FormFieldConfig, Testimonial, UiTranslation, PageTone } from "../types";
 
@@ -123,12 +124,13 @@ export const generateLandingPage = async (product: ProductDetails, reviewCount: 
         insuranceConfig: { enabled: true, label: "Assicurazione Spedizione", cost: "4.90", defaultChecked: true },
         gadgetConfig: { enabled: true, label: "Gadget Omaggio", cost: "0.00", defaultChecked: true },
         formConfiguration: [
-            { id: 'name', label: 'Nome e Cognome', enabled: true, required: true, type: 'text' },
-            { id: 'phone', label: 'Telefono', enabled: true, required: true, type: 'tel' },
-            { id: 'address', label: 'Indirizzo', enabled: true, required: true, type: 'text' },
-            { id: 'address_number', label: 'N° Civico', enabled: true, required: true, type: 'text' },
-            { id: 'city', label: 'Città', enabled: true, required: true, type: 'text' },
-            { id: 'cap', label: 'CAP', enabled: true, required: true, type: 'text' },
+            { id: 'name', label: 'Nome e Cognome', enabled: true, required: true, type: 'text', width: 12 },
+            { id: 'phone', label: 'Telefono', enabled: true, required: true, type: 'tel', width: 12 },
+            { id: 'address', label: 'Indirizzo', enabled: true, required: true, type: 'text', width: 9 },
+            { id: 'address_number', label: 'N° Civico', enabled: true, required: true, type: 'text', width: 3 },
+            { id: 'city', label: 'Città', enabled: true, required: true, type: 'text', width: 8 },
+            { id: 'province', label: 'Provincia (Sigla)', enabled: true, required: true, type: 'text', width: 4 },
+            { id: 'cap', label: 'CAP', enabled: true, required: true, type: 'text', width: 12 },
         ],
         uiTranslation: {
             ...COMMON_UI_DEFAULTS,

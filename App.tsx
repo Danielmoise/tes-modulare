@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, base64ToBlob } from './services/supabaseClient';
 import { generateLandingPage, generateReviews, generateActionImages, translateLandingPage, getLanguageConfig } from './services/geminiService';
@@ -248,8 +249,35 @@ export const App: React.FC = () => {
   useEffect(() => {
     const init = async () => {
         if (isSupabaseConfigured() && supabase) {
-            const { data } = await supabase.from('site_settings').select('config').eq('id', 1).maybeSingle();
-            if (data?.config) setSiteConfig({ ...siteConfig, ...data.config });
+            // Fetch Site Settings
+            const { data: settingsData } = await supabase.from('site_settings').select('config').eq('id', 1).maybeSingle();
+            if (settingsData?.config) setSiteConfig(prev => ({ ...prev, ...settingsData.config }));
+
+            // NEW: Deep Linking Implementation for persistence on refresh
+            const urlParams = new URLSearchParams(window.location.search);
+            const slugParam = urlParams.get('s');
+            const idParam = urlParams.get('p');
+
+            if (slugParam || idParam) {
+                let query = supabase.from('landing_pages').select('*');
+                if (slugParam) {
+                    // Check if slug matches landing OR thank you slug
+                    query = query.or(`slug.eq.${slugParam},thank_you_slug.eq.${slugParam}`);
+                } else {
+                    query = query.eq('id', idParam);
+                }
+
+                const { data: pageData, error } = await query.maybeSingle();
+                if (pageData && !error) {
+                    setSelectedPublicPage(pageData as LandingPageRow);
+                    // Determine which view to show
+                    if (slugParam && pageData.thank_you_slug === slugParam) {
+                        setView('thank_you_view');
+                    } else {
+                        setView('product_view');
+                    }
+                }
+            }
         }
     };
     init();
@@ -405,7 +433,7 @@ export const App: React.FC = () => {
                                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Step 1: Design</label>
                                     <div className="grid grid-cols-1 gap-2">
                                         {TEMPLATES.map(t => (
-                                            <button key={t.id} onClick={() => setSelectedTemplate(t.id)} className={`p-4 rounded-xl border-2 text-left transition-all ${selectedTemplate === t.id ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-500/20' : 'border-slate-100 hover:border-slate-200 bg-slate-50'}`}>
+                                            <button key={t.id} onClick={() => setSelectedTemplate(t.id)} className={`p-4 rounded-xl border-2 text-left transition-all ${selectedTemplate === t.id ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 hover:border-slate-200 bg-slate-50'}`}>
                                                 <p className="font-bold text-slate-900 text-sm">{t.name}</p>
                                                 <p className="text-[10px] text-slate-500 mt-1">{t.desc}</p>
                                             </button>
@@ -544,38 +572,69 @@ export const App: React.FC = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="pt-4 border-t border-slate-100 space-y-2">
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input type="checkbox" checked={generatedContent.insuranceConfig?.enabled} onChange={e => updateContent({ insuranceConfig: { ...generatedContent.insuranceConfig!, enabled: e.target.checked } })} className="w-4 h-4 accent-emerald-500" />
-                                                <span className="text-xs font-bold text-emerald-600">Assicurazione Spedizione</span>
-                                            </label>
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input type="checkbox" checked={generatedContent.gadgetConfig?.enabled} onChange={e => updateContent({ gadgetConfig: { ...generatedContent.gadgetConfig!, enabled: e.target.checked } })} className="w-4 h-4 accent-purple-500" />
-                                                <span className="text-xs font-bold text-purple-600">Gadget Add-on</span>
-                                            </label>
+                                        <div className="pt-4 border-t border-slate-100 space-y-4">
+                                            {/* Assicurazione Spedizione */}
+                                            <div className="space-y-2 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                                                <label className="flex items-center gap-2 cursor-pointer mb-2">
+                                                    <input type="checkbox" checked={generatedContent.insuranceConfig?.enabled} onChange={e => updateContent({ insuranceConfig: { ...generatedContent.insuranceConfig!, enabled: e.target.checked } })} className="w-4 h-4 accent-emerald-500" />
+                                                    <span className="text-xs font-bold text-emerald-700">Assicurazione Spedizione</span>
+                                                </label>
+                                                {generatedContent.insuranceConfig?.enabled && (
+                                                    <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1">
+                                                        <div>
+                                                            <label className="block text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-1">Etichetta</label>
+                                                            <input type="text" value={generatedContent.insuranceConfig.label} onChange={e => updateContent({ insuranceConfig: { ...generatedContent.insuranceConfig!, label: e.target.value } })} className="w-full border border-emerald-200 rounded-lg p-2 text-[10px] outline-none" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-1">Prezzo</label>
+                                                            <input type="text" value={generatedContent.insuranceConfig.cost} onChange={e => updateContent({ insuranceConfig: { ...generatedContent.insuranceConfig!, cost: e.target.value } })} className="w-full border border-emerald-200 rounded-lg p-2 text-[10px] outline-none" />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            {/* Gadget Add-on */}
+                                            <div className="space-y-2 p-3 bg-purple-50 rounded-xl border border-purple-100">
+                                                <label className="flex items-center gap-2 cursor-pointer mb-2">
+                                                    <input type="checkbox" checked={generatedContent.gadgetConfig?.enabled} onChange={e => updateContent({ gadgetConfig: { ...generatedContent.gadgetConfig!, enabled: e.target.checked } })} className="w-4 h-4 accent-purple-500" />
+                                                    <span className="text-xs font-bold text-purple-700">Gadget Add-on</span>
+                                                </label>
+                                                {generatedContent.gadgetConfig?.enabled && (
+                                                    <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1">
+                                                        <div>
+                                                            <label className="block text-[8px] font-black text-purple-600 uppercase tracking-widest mb-1">Etichetta</label>
+                                                            <input type="text" value={generatedContent.gadgetConfig.label} onChange={e => updateContent({ gadgetConfig: { ...generatedContent.gadgetConfig!, label: e.target.value } })} className="w-full border border-purple-200 rounded-lg p-2 text-[10px] outline-none" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[8px] font-black text-purple-600 uppercase tracking-widest mb-1">Prezzo</label>
+                                                            <input type="text" value={generatedContent.gadgetConfig.cost} onChange={e => updateContent({ gadgetConfig: { ...generatedContent.gadgetConfig!, cost: e.target.value } })} className="w-full border border-purple-200 rounded-lg p-2 text-[10px] outline-none" />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </EditorSection>
 
                                     {/* 3. TESTO & CONTENUTO */}
                                     <EditorSection title="Testo & Contenuto" num="3" icon={<FileTextIcon className="w-4 h-4"/>}>
                                         <div>
-                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Headline H1</label>
+                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Headline H1</label>
                                             <textarea value={generatedContent.headline} onChange={e => updateContent({ headline: e.target.value })} className="w-full border border-slate-200 rounded-lg p-3 text-xs h-20 outline-none focus:ring-1 focus:ring-emerald-500 transition-all" />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Subheadline H2</label>
+                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Subheadline H2</label>
                                             <textarea value={generatedContent.subheadline} onChange={e => updateContent({ subheadline: e.target.value })} className="w-full border border-slate-200 rounded-lg p-3 text-xs h-20 outline-none" />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Testo Barra Annunci</label>
+                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Testo Barra Annunci</label>
                                             <input type="text" value={generatedContent.announcementBarText} onChange={e => updateContent({ announcementBarText: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2 text-xs" />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Testo Bottone CTA</label>
+                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Testo Bottone CTA</label>
                                             <input type="text" value={generatedContent.ctaText} onChange={e => updateContent({ ctaText: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2 text-xs" />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Sottotesto Bottone</label>
+                                            <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Sottotesto Bottone</label>
                                             <input type="text" value={generatedContent.ctaSubtext} onChange={e => updateContent({ ctaSubtext: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2 text-xs" />
                                         </div>
                                     </EditorSection>
@@ -690,11 +749,14 @@ export const App: React.FC = () => {
                                         <div className="space-y-4">
                                             {generatedContent.testimonials?.map((t, i) => (
                                                 <div key={i} className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
-                                                    <input type="text" value={t.name} onChange={e => {
-                                                        const newT = [...generatedContent.testimonials!];
-                                                        newT[i] = { ...t, name: e.target.value };
-                                                        updateContent({ testimonials: newT });
-                                                    }} className="w-full border border-slate-200 rounded-lg p-2 text-xs font-bold" />
+                                                    <div className="flex gap-2">
+                                                        <input type="text" value={t.name} onChange={e => {
+                                                            const newT = [...generatedContent.testimonials!];
+                                                            newT[i] = { ...t, name: e.target.value };
+                                                            updateContent({ testimonials: newT });
+                                                        }} className="flex-1 border border-slate-200 rounded-lg p-2 text-xs font-bold" placeholder="Nome" />
+                                                        <button onClick={() => updateContent({ testimonials: generatedContent.testimonials?.filter((_, idx) => idx !== i) })} className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
+                                                    </div>
                                                     <input type="text" placeholder="Titolo Recensione" value={t.title} onChange={e => {
                                                         const newT = [...generatedContent.testimonials!];
                                                         newT[i] = { ...t, title: e.target.value };
@@ -704,8 +766,43 @@ export const App: React.FC = () => {
                                                         const newT = [...generatedContent.testimonials!];
                                                         newT[i] = { ...t, text: e.target.value };
                                                         updateContent({ testimonials: newT });
-                                                    }} className="w-full border border-slate-200 rounded-lg p-2 text-xs h-16 outline-none" />
-                                                    <div className="flex items-center justify-between">
+                                                    }} className="w-full border border-slate-200 rounded-lg p-2 text-xs h-16 outline-none" placeholder="Contenuto recensione..." />
+                                                    
+                                                    {/* NEW: Section for multiple image URLs */}
+                                                    <div className="pt-2 border-t border-slate-100">
+                                                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Immagini Recensione (URL)</label>
+                                                        {t.images?.map((url, imgIdx) => (
+                                                            <div key={imgIdx} className="flex gap-2 mb-2">
+                                                                <input 
+                                                                    type="text" 
+                                                                    value={url} 
+                                                                    onChange={e => {
+                                                                        const newT = [...generatedContent.testimonials!];
+                                                                        const newImgs = [...(newT[i].images || [])];
+                                                                        newImgs[imgIdx] = e.target.value;
+                                                                        newT[i] = { ...t, images: newImgs };
+                                                                        updateContent({ testimonials: newT });
+                                                                    }}
+                                                                    className="flex-1 border border-slate-200 rounded-lg p-2 text-[10px] outline-none focus:ring-1 focus:ring-blue-400"
+                                                                    placeholder="https://..."
+                                                                />
+                                                                <button onClick={() => {
+                                                                    const newT = [...generatedContent.testimonials!];
+                                                                    const newImgs = (newT[i].images || []).filter((_, idx) => idx !== imgIdx);
+                                                                    newT[i] = { ...t, images: newImgs };
+                                                                    updateContent({ testimonials: newT });
+                                                                }} className="text-slate-300 hover:text-red-500 transition-colors"><X className="w-3.5 h-3.5"/></button>
+                                                            </div>
+                                                        ))}
+                                                        <button onClick={() => {
+                                                            const newT = [...generatedContent.testimonials!];
+                                                            const currentImgs = newT[i].images || [];
+                                                            newT[i] = { ...t, images: [...currentImgs, ""] };
+                                                            updateContent({ testimonials: newT });
+                                                        }} className="text-[9px] font-bold text-blue-600 hover:text-blue-700 uppercase flex items-center gap-1 mt-1 transition-colors">+ Aggiungi Immagine URL</button>
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
                                                         <div className="flex text-yellow-400">
                                                             {[...Array(5)].map((_, k) => <button key={k} onClick={() => {
                                                                 const newT = [...generatedContent.testimonials!];
@@ -713,14 +810,14 @@ export const App: React.FC = () => {
                                                                 updateContent({ testimonials: newT });
                                                             }}><Star className={`w-3.5 h-3.5 ${k < (t.rating || 5) ? 'fill-current' : 'text-slate-200'}`} /></button>)}
                                                         </div>
-                                                        <button onClick={() => updateContent({ testimonials: generatedContent.testimonials?.filter((_, idx) => idx !== i) })} className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
+                                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Rating {t.rating || 5}/5</span>
                                                     </div>
                                                 </div>
                                             ))}
-                                            <button onClick={() => updateContent({ testimonials: [...(generatedContent.testimonials || []), { name: "Nuovo Cliente", title: "Recensione Fantastica", text: "Prodotto incredibile!", rating: 5, role: "Acquisto Verificato" }] })} className="w-full py-3 bg-white border border-slate-200 rounded-xl text-slate-500 font-bold text-xs uppercase shadow-sm">+ Aggiungi Recensione</button>
+                                            <button onClick={() => updateContent({ testimonials: [...(generatedContent.testimonials || []), { name: "Nuovo Cliente", title: "Recensione Fantastica", text: "Prodotto incredibile!", rating: 5, role: "Acquisto Verificato", images: [] }] })} className="w-full py-3 bg-white border border-slate-200 rounded-xl text-slate-500 font-bold text-xs uppercase shadow-sm">+ Aggiungi Recensione</button>
                                         </div>
                                     </EditorSection>
-
+                                    
                                     {/* 8. FORM CONTATTI */}
                                     <EditorSection title="Form Contatti" num="8" icon={<Mail className="w-4 h-4"/>}>
                                         <div className="flex gap-2 p-1 bg-slate-100 rounded-lg mb-4">
@@ -737,28 +834,46 @@ export const App: React.FC = () => {
                                                 </div>
                                                 <div className="space-y-1">
                                                     {generatedContent.formConfiguration?.map((field, idx) => (
-                                                        <div key={field.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 transition-all hover:bg-white group">
-                                                            <div className="flex-1">
-                                                                <input type="text" value={field.label} onChange={e => {
-                                                                    const newFields = [...generatedContent.formConfiguration!];
-                                                                    newFields[idx] = { ...field, label: e.target.value };
-                                                                    updateContent({ formConfiguration: newFields });
-                                                                }} className="w-full bg-transparent border-none p-0 text-xs font-bold text-slate-800 focus:ring-0" />
-                                                                <div className="flex gap-2 mt-1">
-                                                                    <span className="text-[8px] font-bold text-slate-300 uppercase">{field.type}</span>
+                                                        <div key={field.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 transition-all hover:bg-white group">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="flex-1">
+                                                                    <input type="text" value={field.label} onChange={e => {
+                                                                        const newFields = [...generatedContent.formConfiguration!];
+                                                                        newFields[idx] = { ...field, label: e.target.value };
+                                                                        updateContent({ formConfiguration: newFields });
+                                                                    }} className="w-full bg-transparent border-none p-0 text-xs font-bold text-slate-800 focus:ring-0" />
+                                                                </div>
+                                                                <div className="flex items-center gap-3">
+                                                                    <button onClick={() => {
+                                                                        const newFields = [...generatedContent.formConfiguration!];
+                                                                        newFields[idx] = { ...field, required: !field.required };
+                                                                        updateContent({ formConfiguration: newFields });
+                                                                    }} className={`text-[9px] font-bold uppercase transition-colors ${field.required ? 'text-red-500' : 'text-slate-300'}`}>Obbl.</button>
+                                                                    <button onClick={() => {
+                                                                        const newFields = [...generatedContent.formConfiguration!];
+                                                                        newFields[idx] = { ...field, enabled: !field.enabled };
+                                                                        updateContent({ formConfiguration: newFields });
+                                                                    }} className={`text-[9px] font-bold uppercase transition-colors ${field.enabled ? 'text-emerald-500' : 'text-slate-300'}`}>Attivo</button>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex items-center gap-3">
-                                                                <button onClick={() => {
-                                                                    const newFields = [...generatedContent.formConfiguration!];
-                                                                    newFields[idx] = { ...field, required: !field.required };
-                                                                    updateContent({ formConfiguration: newFields });
-                                                                }} className={`text-[9px] font-bold uppercase transition-colors ${field.required ? 'text-red-500' : 'text-slate-300'}`}>Obbl.</button>
-                                                                <button onClick={() => {
-                                                                    const newFields = [...generatedContent.formConfiguration!];
-                                                                    newFields[idx] = { ...field, enabled: !field.enabled };
-                                                                    updateContent({ formConfiguration: newFields });
-                                                                }} className={`text-[9px] font-bold uppercase transition-colors ${field.enabled ? 'text-emerald-500' : 'text-slate-300'}`}>Attivo</button>
+                                                            <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-200/50">
+                                                                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Larghezza Campo</span>
+                                                                <select 
+                                                                    value={field.width || 12} 
+                                                                    onChange={e => {
+                                                                        const newFields = [...generatedContent.formConfiguration!];
+                                                                        newFields[idx] = { ...field, width: parseInt(e.target.value) };
+                                                                        updateContent({ formConfiguration: newFields });
+                                                                    }}
+                                                                    className="text-[10px] font-bold bg-white border border-slate-200 rounded px-1 py-0.5 outline-none"
+                                                                >
+                                                                    <option value={12}>Full (1/1)</option>
+                                                                    <option value={9}>3/4</option>
+                                                                    <option value={8}>2/3</option>
+                                                                    <option value={6}>Metà (1/2)</option>
+                                                                    <option value={4}>1/3</option>
+                                                                    <option value={3}>1/4</option>
+                                                                </select>
                                                             </div>
                                                         </div>
                                                     ))}
