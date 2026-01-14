@@ -207,6 +207,48 @@ export const translateLandingPage = async (content: GeneratedContent, targetLang
     return JSON.parse(response.text || JSON.stringify(content));
 };
 
-export const generateActionImages = async (prompt: string): Promise<string[]> => {
-    return [];
+export const generateActionImages = async (product: ProductDetails): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    // Preparation of context parts
+    const parts: any[] = [
+        { text: `Genera un'immagine pubblicitaria professionale e accattivante per il prodotto: ${product.name}. 
+        Descrizione: ${product.description}. 
+        L'immagine deve essere in alta risoluzione, stile e-commerce premium, pronta per una landing page di vendita.` }
+    ];
+
+    // If we have an existing image, send it as reference
+    if (product.images && product.images.length > 0) {
+        const refImg = product.images[0];
+        if (refImg.startsWith('data:')) {
+            const [mimeInfo, base64Data] = refImg.split(';base64,');
+            const mimeType = mimeInfo.replace('data:', '');
+            parts.push({
+                inlineData: {
+                    data: base64Data,
+                    mimeType: mimeType
+                }
+            });
+            parts[0].text += " Prendi ispirazione dall'immagine fornita per quanto riguarda l'aspetto del prodotto.";
+        }
+    }
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts },
+        config: {
+            imageConfig: {
+                aspectRatio: "1:1",
+                imageSize: "1K"
+            }
+        }
+    });
+
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData) {
+            return `data:image/png;base64,${part.inlineData.data}`;
+        }
+    }
+
+    throw new Error("Impossibile generare l'immagine AI.");
 };

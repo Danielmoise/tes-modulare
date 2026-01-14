@@ -206,6 +206,7 @@ export const App: React.FC = () => {
   const [editingPageId, setEditingPageId] = useState<string | null>(null); 
   const [editingMode, setEditingMode] = useState<'landing' | 'thankyou'>('landing');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingAIImage, setIsGeneratingAIImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tyFileInputRef = useRef<HTMLInputElement>(null);
@@ -324,6 +325,29 @@ export const App: React.FC = () => {
       setGeneratedThankYouContent(ty);
       setSlug(formatSlug(product.name)); setTySlug(formatSlug(product.name) + getThankYouSuffix(result.language || 'Italiano'));
     } finally { setIsGenerating(false); }
+  };
+
+  const handleAddImageUrl = () => {
+    if (imageUrl && imageUrl.trim() !== '') {
+        setProduct(prev => ({ ...prev, images: [...(prev.images || []), imageUrl.trim()] }));
+        setImageUrl('');
+    }
+  };
+
+  const handleGenerateAIImage = async () => {
+    if (!product.name || !product.description) {
+        alert("Inserisci Nome e Descrizione del prodotto per generare l'immagine AI.");
+        return;
+    }
+    setIsGeneratingAIImage(true);
+    try {
+        const aiImg = await generateActionImages(product);
+        setProduct(prev => ({ ...prev, images: [...(prev.images || []), aiImg] }));
+    } catch (e) {
+        alert("Errore nella generazione immagine AI.");
+    } finally {
+        setIsGeneratingAIImage(false);
+    }
   };
 
   const handleViewPage = (page: LandingPageRow) => {
@@ -448,11 +472,46 @@ export const App: React.FC = () => {
                                 </div>
                                 <div className="space-y-3">
                                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Foto (Carica o Incolla URL)</label>
-                                    <button onClick={() => fileInputRef.current?.click()} className="w-full bg-slate-100 hover:bg-slate-200 p-3 rounded-xl text-slate-600 font-bold text-xs flex items-center justify-center gap-2 border border-slate-200">
-                                        <Images className="w-4 h-4" /> Carica Foto Prodotto
-                                    </button>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => fileInputRef.current?.click()} className="flex-1 bg-slate-100 hover:bg-slate-200 p-3 rounded-xl text-slate-600 font-bold text-xs flex items-center justify-center gap-2 border border-slate-200">
+                                            <Images className="w-4 h-4" /> Carica Foto
+                                        </button>
+                                        <button 
+                                            onClick={handleGenerateAIImage} 
+                                            disabled={isGeneratingAIImage}
+                                            className="flex-1 bg-emerald-50 hover:bg-emerald-100 p-3 rounded-xl text-emerald-600 font-bold text-xs flex items-center justify-center gap-2 border border-emerald-200 disabled:opacity-50"
+                                        >
+                                            {isGeneratingAIImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Sparkles className="w-4 h-4" /> Genera con AI</>}
+                                        </button>
+                                    </div>
                                     <input type="file" ref={fileInputRef} onChange={(e) => handleFileUpload(e)} className="hidden" accept="image/*" />
-                                    <input type="text" placeholder="Incolla URL..." value={imageUrl} onChange={e => setImageUrl(e.target.value)} className="w-full border border-slate-200 rounded-xl p-3 text-sm outline-none" />
+                                    <div className="flex gap-2">
+                                        <input 
+                                            type="text" 
+                                            placeholder="Incolla URL..." 
+                                            value={imageUrl} 
+                                            onChange={e => setImageUrl(e.target.value)} 
+                                            className="flex-1 border border-slate-200 rounded-xl p-3 text-sm outline-none" 
+                                        />
+                                        <button onClick={handleAddImageUrl} className="bg-slate-900 text-white p-3 rounded-xl hover:bg-slate-800 transition-all"><Plus className="w-4 h-4"/></button>
+                                    </div>
+                                    
+                                    {/* PREVIEW CARICATE/GENERATE */}
+                                    {product.images && product.images.length > 0 && (
+                                        <div className="grid grid-cols-4 gap-2 mt-2 animate-in fade-in">
+                                            {product.images.map((img, idx) => (
+                                                <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
+                                                    <img src={img} className="w-full h-full object-cover" />
+                                                    <button 
+                                                        onClick={() => setProduct(prev => ({ ...prev, images: prev.images?.filter((_, i) => i !== idx) }))}
+                                                        className="absolute top-1 right-1 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    >
+                                                        <X className="w-3 h-3"/>
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-3">
                                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Contenuto</label>
