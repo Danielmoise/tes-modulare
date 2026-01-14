@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { GeneratedContent, TemplateId, FormFieldConfig, TypographyConfig, Testimonial } from '../types';
 import { CheckCircle, Star, ShoppingCart, ArrowRight, ShieldCheck, Clock, Menu, User, CheckSquare, Truck, MessageCircle, X, Phone, MapPin, FileText, Loader2, Mail, Home, Image as ImageIcon, CreditCard, Banknote, ChevronDown, Zap, RefreshCcw, Check, Lock, Package, Eye, ThumbsUp, Flame, AlertTriangle, ShoppingBag, Bell, Maximize2, Gift } from 'lucide-react';
@@ -566,8 +567,22 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
         }
         
         const totalPrice = calculateTotal();
-        const currentName = customData?.name || formData.name || '';
-        const currentPhone = customData?.phone || formData.phone || '';
+        
+        // WORLD CLASS EXTRACTION: Supporting multiple field names for both custom and built-in forms
+        const currentName = customData?.name || 
+                           formData.name || 
+                           formData.first_name || 
+                           formData.full_name || 
+                           formData.nome || 
+                           '';
+                           
+        const currentPhone = customData?.phone || 
+                            formData.phone || 
+                            formData.tel || 
+                            formData.telefono || 
+                            formData.mobile || 
+                            formData.cellulare || 
+                            '';
 
         const payloadData: Record<string, any> = {
             event_type: 'new_order',
@@ -598,19 +613,29 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
         trackEvent('Contact', {}, { email: formData.email, phone: currentPhone });
         
         try {
-            // NEW WORLD CLASS FEATURE: Automatic Parameter Forwarding for External URLs
+            // REDIRECT LOGIC: Handling external redirect with parameter forwarding
             if (content.customThankYouUrl && content.customThankYouUrl.trim() !== '') {
                 let baseUrl = content.customThankYouUrl.trim();
+                
+                // Placeholder Replacement Support: replace {name}, {phone}, etc if present in the URL string
+                baseUrl = baseUrl
+                    .replace('{name}', encodeURIComponent(currentName))
+                    .replace('{phone}', encodeURIComponent(currentPhone))
+                    .replace('[name]', encodeURIComponent(currentName))
+                    .replace('[phone]', encodeURIComponent(currentPhone));
+
                 if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://') && !baseUrl.startsWith('/')) {
                     baseUrl = 'https://' + baseUrl;
                 }
                 
                 try {
                     const targetUrl = new URL(baseUrl);
+                    // Standard Query Param Forwarding
                     if (currentName) targetUrl.searchParams.set('name', currentName);
                     if (currentPhone) targetUrl.searchParams.set('phone', currentPhone);
                     window.location.href = targetUrl.toString();
                 } catch (urlErr) {
+                    // Fallback for non-standard URL strings
                     const separator = baseUrl.includes('?') ? '&' : '?';
                     const params = `name=${encodeURIComponent(currentName)}&phone=${encodeURIComponent(currentPhone)}`;
                     window.location.href = `${baseUrl}${separator}${params}`;
@@ -1003,7 +1028,7 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
         </div>
     );
 
-    // Reviews Component to reuse
+    // Reviews Section (to reuse)
     const ReviewsSection = () => (
         <div className="bg-white rounded-none md:rounded-3xl p-6 md:p-12 md:shadow-xl md:border border-slate-100 mb-20 relative overflow-hidden border-t border-slate-100 md:border-t-0">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-500 md:h-2"></div>
@@ -1061,6 +1086,7 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
                     <div className="flex-1 w-full">
                         <ul className="space-y-3">
                             {content.boxContent.items.map((item, idx) => (
+                                // FIX: Added missing opening tag for li to resolve syntax errors.
                                 <li key={idx} className="flex items-center gap-3 bg-slate-50 p-3 rounded-lg border border-slate-100">
                                     <div className="bg-emerald-100 text-emerald-600 rounded-full p-1">
                                         <Check className="w-4 h-4" strokeWidth={3} />
@@ -1080,6 +1106,7 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
         );
     };
 
+    // Feature Block Component
     const FeatureBlock = React.memo(({ f, i }: { f: any, i: number }) => (
         <div className={`flex flex-col gap-6 md:gap-16 items-center ${i % 2 !== 0 ? 'md:flex-row-reverse' : 'md:flex-row'} bg-white md:bg-transparent p-0 md:p-0 rounded-2xl shadow-none md:shadow-none`}>
             <div className="w-full md:w-1/2">

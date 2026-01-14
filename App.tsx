@@ -437,6 +437,16 @@ export const App: React.FC = () => {
                                             {SUPPORTED_LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
                                         </select>
                                     </div>
+                                    <div className="grid grid-cols-2 gap-2 mt-2">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-wider">N° Paragrafi</label>
+                                            <input type="number" min="1" max="10" value={product.featureCount} onChange={e => setProduct({...product, featureCount: parseInt(e.target.value) || 3})} className="w-full border border-slate-200 rounded-xl p-2.5 text-xs outline-none focus:ring-2 focus:ring-emerald-500" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-wider">N° Recensioni</label>
+                                            <input type="number" min="1" max="20" value={reviewCount} onChange={e => setReviewCount(parseInt(e.target.value) || 10)} className="w-full border border-slate-200 rounded-xl p-2.5 text-xs outline-none focus:ring-2 focus:ring-emerald-500" />
+                                        </div>
+                                    </div>
                                 </div>
                                 <button onClick={handleGenerate} disabled={isGenerating} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-black shadow-xl flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all">
                                     {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Sparkles className="w-5 h-5" /> Genera Anteprima</>}

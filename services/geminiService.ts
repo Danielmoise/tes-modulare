@@ -126,6 +126,7 @@ export const generateLandingPage = async (product: ProductDetails, reviewCount: 
             { id: 'name', label: 'Nome e Cognome', enabled: true, required: true, type: 'text' },
             { id: 'phone', label: 'Telefono', enabled: true, required: true, type: 'tel' },
             { id: 'address', label: 'Indirizzo', enabled: true, required: true, type: 'text' },
+            { id: 'address_number', label: 'N° Civico', enabled: true, required: true, type: 'text' },
             { id: 'city', label: 'Città', enabled: true, required: true, type: 'text' },
             { id: 'cap', label: 'CAP', enabled: true, required: true, type: 'text' },
         ],
