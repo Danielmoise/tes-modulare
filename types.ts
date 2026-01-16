@@ -1,4 +1,3 @@
-
 export interface UserSession {
   id: string;
   email: string;
@@ -11,7 +10,7 @@ export enum PageTone {
   LUXURY = 'Luxury'
 }
 
-export type TemplateId = 'classic' | 'modern-split' | 'luxury' | 'advertorial' | 'high-impact' | 'gadget-cod' | 'shopify-clean' | 'premium-brand' | 'mobile-optimized';
+export type TemplateId = 'classic' | 'modern-split' | 'luxury' | 'advertorial' | 'high-impact' | 'gadget-cod' | 'shopify-clean' | 'premium-brand' | 'mobile-optimized' | 'health-clean';
 
 export type AIImageStyle = 'lifestyle' | 'technical' | 'informative';
 
@@ -41,6 +40,7 @@ export interface FormFieldConfig {
   required: boolean;
   type: 'text' | 'tel' | 'email' | 'textarea';
   width?: number; // Grid width from 1 to 12
+  validationType?: 'none' | 'numeric' | 'alpha' | 'alphanumeric'; // NEW: Input restriction
 }
 
 export interface Testimonial {
@@ -127,6 +127,12 @@ export interface OnlineUser {
     pageUrl?: string;
 }
 
+export interface AnnouncementItem {
+  text: string;
+  icon?: string;
+  iconSize?: number;
+}
+
 export interface GeneratedContent {
   templateId?: TemplateId; 
   language?: string; 
@@ -138,6 +144,9 @@ export interface GeneratedContent {
   generatedImages?: string[]; 
   
   announcementBarText?: string; 
+  announcements?: AnnouncementItem[]; // NEW: Multiple announcements
+  announcementInterval?: number; // NEW: Interval in seconds
+  announcementFontSize?: number; // NEW: Font size in pixels
 
   stockConfig?: {
     enabled: boolean;
@@ -208,6 +217,7 @@ export interface GeneratedContent {
   priceStyles?: {
       color?: string; // Hex color override for price
       fontSize?: string; // PX size for price
+      className?: string; // NEW: Tailwind classes for gradients (i.e. bg-clip-text text-transparent bg-gradient-to-r from-...)
   };
   customTypography?: {
       h1?: string; // PX size
@@ -236,6 +246,7 @@ export interface GeneratedContent {
   
   // Legacy/Generic (kept for backward compatibility or extra scripts)
   customHeadHtml?: string; 
+  customHeadHtml2?: string; // NEW: Second field for head scripts
   customThankYouHtml?: string; 
   customThankYouUrl?: string; // NEW: Full URL redirect override
   

@@ -75,6 +75,12 @@ export const generateLandingPage = async (product: ProductDetails, reviewCount: 
     Translate EVERYTHING into ${product.language}, including internal labels and UI elements. 
     Ensure no Italian words remain.
     The JSON must follow the GeneratedContent interface structure.
+    
+    SPECIAL REQUEST: Generate exactly 2 short and punchy marketing announcements for the top bar. 
+    One should be about an offer/shipping (e.g. "Free Shipping" or "50% Discount") 
+    and one about product quality or a unique benefit.
+    For each, suggest an icon from this list: truck, zap, star, clock, gift, shield, flame, bell.
+    
     Also provide a fully translated 'uiTranslation' object based on common e-commerce terms in ${product.language}.`;
 
     const response = await ai.models.generateContent({
@@ -89,7 +95,17 @@ export const generateLandingPage = async (product: ProductDetails, reviewCount: 
                     subheadline: { type: Type.STRING },
                     ctaText: { type: Type.STRING },
                     ctaSubtext: { type: Type.STRING },
-                    announcementBarText: { type: Type.STRING },
+                    announcements: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                text: { type: Type.STRING },
+                                icon: { type: Type.STRING }
+                            },
+                            required: ["text", "icon"]
+                        }
+                    },
                     featuresSectionTitle: { type: Type.STRING },
                     benefits: { type: Type.ARRAY, items: { type: Type.STRING } },
                     features: {
@@ -124,12 +140,13 @@ export const generateLandingPage = async (product: ProductDetails, reviewCount: 
                     price: { type: Type.STRING },
                     originalPrice: { type: Type.STRING },
                 },
-                required: ["headline", "subheadline", "ctaText", "benefits", "features", "uiTranslation"]
+                required: ["headline", "subheadline", "ctaText", "benefits", "features", "uiTranslation", "announcements"]
             }
         }
     });
 
-    const baseContent = JSON.parse(cleanJson(response.text || '{}')) as any;
+    const responseText = response.text || '{}';
+    const baseContent = JSON.parse(cleanJson(responseText)) as any;
     
     return {
         ...baseContent,
@@ -145,13 +162,13 @@ export const generateLandingPage = async (product: ProductDetails, reviewCount: 
         insuranceConfig: { enabled: true, label: baseContent.uiTranslation?.shippingInsurance || "Assicurazione Spedizione", cost: "4.90", defaultChecked: true },
         gadgetConfig: { enabled: true, label: baseContent.uiTranslation?.gadgetLabel || "Gadget Omaggio", cost: "0.00", defaultChecked: true },
         formConfiguration: [
-            { id: 'name', label: baseContent.uiTranslation?.nameLabel || 'Nome e Cognome', enabled: true, required: true, type: 'text', width: 12 },
-            { id: 'phone', label: baseContent.uiTranslation?.phoneLabel || 'Telefono', enabled: true, required: true, type: 'tel', width: 12 },
-            { id: 'address', label: baseContent.uiTranslation?.addressLabel || 'Indirizzo', enabled: true, required: true, type: 'text', width: 9 },
-            { id: 'address_number', label: baseContent.uiTranslation?.addressNumberLabel || 'N° Civico', enabled: true, required: true, type: 'text', width: 3 },
-            { id: 'city', label: baseContent.uiTranslation?.cityLabel || 'Città', enabled: true, required: true, type: 'text', width: 8 },
-            { id: 'province', label: baseContent.uiTranslation?.provinceLabel || 'Provincia (Sigla)', enabled: true, required: true, type: 'text', width: 4 },
-            { id: 'cap', label: baseContent.uiTranslation?.capLabel || 'CAP', enabled: true, required: true, type: 'text', width: 12 },
+            { id: 'name', label: baseContent.uiTranslation?.nameLabel || 'Nome e Cognome', enabled: true, required: true, type: 'text', width: 12, validationType: 'none' },
+            { id: 'phone', label: baseContent.uiTranslation?.phoneLabel || 'Telefono', enabled: true, required: true, type: 'tel', width: 12, validationType: 'numeric' },
+            { id: 'address', label: baseContent.uiTranslation?.addressLabel || 'Indirizzo', enabled: true, required: true, type: 'text', width: 9, validationType: 'none' },
+            { id: 'address_number', label: baseContent.uiTranslation?.addressNumberLabel || 'N° Civico', enabled: true, required: true, type: 'text', width: 3, validationType: 'numeric' },
+            { id: 'city', label: baseContent.uiTranslation?.cityLabel || 'Città', enabled: true, required: true, type: 'text', width: 8, validationType: 'none' },
+            { id: 'province', label: baseContent.uiTranslation?.provinceLabel || 'Provincia (Sigla)', enabled: true, required: true, type: 'text', width: 4, validationType: 'alpha' },
+            { id: 'cap', label: baseContent.uiTranslation?.capLabel || 'CAP', enabled: true, required: true, type: 'text', width: 12, validationType: 'numeric' },
         ],
         uiTranslation: {
             ...COMMON_UI_DEFAULTS,
@@ -173,10 +190,22 @@ const getLegalDisclaimerForLanguage = (lang: string): string => {
 export const generateReviews = async (productName: string, lang: string, count: number): Promise<Testimonial[]> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
+    // Calcoliamo la data odierna per il prompt
+    const today = new Date();
+    const todayFormatted = today.toLocaleDateString(lang);
+
     const prompt = `Generate EXACTLY ${count} short, realistic customer reviews for a product named "${productName}" in ${lang}. 
-    Ensure variety in user names and opinions (mostly positive, some neutral). 
-    IMPORTANT: You must provide exactly ${count} objects in the JSON array. Do not skip any.
+    
+    REFERENCE DATE: Today is ${todayFormatted}.
+    
+    CRITICAL DATE RULES:
+    1. At least 3 reviews MUST be very recent, dated within the LAST 7 DAYS from today (${todayFormatted}).
+    2. The VERY FIRST review in the returned list MUST be the most recent one (max 1-3 days ago).
+    3. All other reviews should have dates ranging from 1 week ago up to 3 months ago.
+    4. Format the dates naturally for the ${lang} locale (e.g., "2 giorni fa", "Ieri", or standard DD/MM/YYYY).
+    
     Return as a JSON array of objects with name, title, text, rating (1-5), date, and role.
+    Ensure the list is ALREADY SORTED from the most recent to the oldest to give immediate "freshness" to the customer.
     Ensure names are culturally appropriate for ${lang} speakers.`;
 
     const response = await ai.models.generateContent({
@@ -201,7 +230,8 @@ export const generateReviews = async (productName: string, lang: string, count: 
         }
     });
 
-    const reviews = JSON.parse(cleanJson(response.text || '[]'));
+    const responseText = response.text || '[]';
+    const reviews = JSON.parse(cleanJson(responseText));
     return reviews.slice(0, count);
 };
 
@@ -218,7 +248,7 @@ export const translateLandingPage = async (content: GeneratedContent, targetLang
         subheadline: content.subheadline || '',
         ctaText: content.ctaText || '',
         ctaSubtext: content.ctaSubtext || '',
-        announcementBarText: content.announcementBarText || '',
+        announcements: content.announcements || [],
         benefits: benefitsToMap,
         features: featuresToMap.map(f => ({ title: f.title, description: f.description })),
         testimonials: testimonialsToMap.map(t => ({ name: t.name, title: t.title, text: t.text, role: t.role })),
@@ -250,7 +280,16 @@ export const translateLandingPage = async (content: GeneratedContent, targetLang
                     subheadline: { type: Type.STRING },
                     ctaText: { type: Type.STRING },
                     ctaSubtext: { type: Type.STRING },
-                    announcementBarText: { type: Type.STRING },
+                    announcements: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                text: { type: Type.STRING },
+                                icon: { type: Type.STRING }
+                            }
+                        }
+                    },
                     benefits: { type: Type.ARRAY, items: { type: Type.STRING } },
                     features: {
                         type: Type.ARRAY,
@@ -281,7 +320,10 @@ export const translateLandingPage = async (content: GeneratedContent, targetLang
                             thankYouTitle: { type: Type.STRING },
                             thankYouMsg: { type: Type.STRING },
                             shippingInsurance: { type: Type.STRING },
-                            gadgetLabel: { type: Type.STRING }
+                            gadgetLabel: { type: Type.STRING },
+                            reviews: { type: Type.STRING },
+                            offer: { type: Type.STRING },
+                            completeOrder: { type: Type.STRING }
                         }
                     },
                     formLabels: {
@@ -299,7 +341,8 @@ export const translateLandingPage = async (content: GeneratedContent, targetLang
         }
     });
 
-    const translatedFields = JSON.parse(cleanJson(response.text || '{}'));
+    const responseText = response.text || '{}';
+    const translatedFields = JSON.parse(cleanJson(responseText));
     
     return {
         ...content,
@@ -386,7 +429,8 @@ export const rewriteLandingPage = async (content: GeneratedContent, targetTone: 
         }
     });
 
-    const rewrittenFields = JSON.parse(cleanJson(response.text || '{}'));
+    const responseText = response.text || '{}';
+    const rewrittenFields = JSON.parse(cleanJson(responseText));
     
     return {
         ...content,
