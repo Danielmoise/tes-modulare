@@ -13,6 +13,8 @@ export enum PageTone {
 
 export type TemplateId = 'classic' | 'modern-split' | 'luxury' | 'advertorial' | 'high-impact' | 'gadget-cod' | 'shopify-clean' | 'premium-brand' | 'mobile-optimized';
 
+export type AIImageStyle = 'lifestyle' | 'technical' | 'informative';
+
 export interface SiteConfig {
   siteName: string;
   footerText: string;
@@ -29,6 +31,7 @@ export interface ProductDetails {
   image?: string; // Legacy support for single image
   images?: string[]; // Array of images
   featureCount?: number; // Number of paragraphs/features to generate
+  selectedImageStyles?: AIImageStyle[]; // NEW: Preferred styles for AI image generation
 }
 
 export interface FormFieldConfig {
@@ -150,6 +153,11 @@ export interface GeneratedContent {
 
   showFeatureIcons?: boolean;
   showSocialProofBadge?: boolean; // NEW: Toggle for the "Michelle and 758 others" badge
+  socialProofBadgeConfig?: { // NEW: Customizable fields for the social proof badge
+      name?: string;
+      text?: string;
+      avatarUrls?: string[];
+  };
 
   benefits: string[];
   features: Array<{ title: string; description: string; image?: string; showCta?: boolean }>; 

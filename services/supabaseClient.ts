@@ -1,3 +1,4 @@
+
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // NOTE: Ideally these are in process.env or import.meta.env. 
@@ -40,4 +41,38 @@ export const base64ToBlob = (base64: string): Blob | null => {
     console.error("Error converting base64 to blob", e);
     return null;
   }
+};
+
+/**
+ * Carica un'immagine in formato Base64 nello storage di Supabase
+ * @param base64 L'immagine in stringa Base64
+ * @param bucket Il nome del bucket storage
+ * @param path Il percorso/nome del file nel bucket
+ * @returns L'URL pubblico dell'immagine caricata
+ */
+export const uploadImage = async (base64: string, bucket: string, path: string): Promise<string | null> => {
+  if (!supabase) return null;
+  
+  const blob = base64ToBlob(base64);
+  if (!blob) return null;
+
+  const fileName = `${path}-${Date.now()}.png`;
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .upload(fileName, blob, {
+      contentType: blob.type,
+      cacheControl: '3600',
+      upsert: true
+    });
+
+  if (error) {
+    console.error("Error uploading image to storage:", error);
+    return null;
+  }
+
+  const { data: { publicUrl } } = supabase.storage
+    .from(bucket)
+    .getPublicUrl(fileName);
+
+  return publicUrl;
 };

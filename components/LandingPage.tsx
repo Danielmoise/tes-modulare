@@ -68,7 +68,6 @@ const trackEvent = (
     userInfo?: { email?: string, phone?: string }
 ) => {
     // Pixel tracking disabled
-    // console.log(`[Pixel] Tracking disabled: ${eventName}`, data);
 };
 
 // Helper function to generate Tailwind classes based on Typography Config
@@ -263,15 +262,25 @@ const SOCIAL_PROOF_NAMES: Record<string, string> = {
     'Slovacco': 'Nika'
 };
 
-const SocialProofBadge: React.FC<{ language: string, text: string }> = ({ language, text }) => {
-    const name = SOCIAL_PROOF_NAMES[language] || SOCIAL_PROOF_NAMES['Inglese'];
+const SocialProofBadge: React.FC<{ 
+    language: string, 
+    defaultText: string, 
+    config?: { name?: string, text?: string, avatarUrls?: string[] } 
+}> = ({ language, defaultText, config }) => {
+    const name = config?.name || SOCIAL_PROOF_NAMES[language] || SOCIAL_PROOF_NAMES['Inglese'];
+    const text = config?.text || defaultText;
+    const avatars = config?.avatarUrls || [
+        "https://randomuser.me/api/portraits/women/44.jpg",
+        "https://randomuser.me/api/portraits/women/68.jpg",
+        "https://randomuser.me/api/portraits/women/33.jpg"
+    ];
     
     return (
         <div className="inline-flex items-center gap-3 bg-white py-1.5 px-2 pr-4 rounded-full shadow-sm border border-slate-100 w-fit animate-in fade-in slide-in-from-bottom-2 mt-2 mb-2">
             <div className="flex -space-x-2 items-center">
-                <img src="https://randomuser.me/api/portraits/women/44.jpg" alt="User 1" className="w-6 h-6 rounded-full border-2 border-white" />
-                <img src="https://randomuser.me/api/portraits/women/68.jpg" alt="User 2" className="w-6 h-6 rounded-full border-2 border-white" />
-                <img src="https://randomuser.me/api/portraits/women/33.jpg" alt="User 3" className="w-6 h-6 rounded-full border-2 border-white" />
+                {avatars.map((url, idx) => (
+                    <img key={idx} src={url} alt={`User ${idx + 1}`} className="w-6 h-6 rounded-full border-2 border-white" />
+                ))}
             </div>
             <div className="text-xs text-slate-700 leading-none flex items-center gap-1">
                 <span className="font-bold text-slate-900">{name}</span>
@@ -481,21 +490,14 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
                 const handleCustomSubmit = (e: Event) => {
                     e.preventDefault();
                     
-                    // Extract data from custom form using multiple possible field names
                     const htmlFormData = new FormData(form);
-                    const nameValue = htmlFormData.get('name') || htmlFormData.get('first_name') || htmlFormData.get('full_name') || htmlFormData.get('nome') || htmlFormData.get('cognome') || '';
-                    const phoneValue = htmlFormData.get('phone') || htmlFormData.get('telefono') || htmlFormData.get('tel') || htmlFormData.get('mobile') || htmlFormData.get('cellulare') || '';
-                    
                     const extractedData: Record<string, string> = {};
                     htmlFormData.forEach((value, key) => {
                         extractedData[key] = value.toString();
                     });
 
-                    // Update internal state but also pass it directly to finalizeOrder to avoid state batching race conditions
                     setFormData(prev => ({ ...prev, ...extractedData }));
-                    
-                    // Trigger the redirect logic with extracted data
-                    finalizeOrder('cod', { name: nameValue.toString(), phone: phoneValue.toString() });
+                    finalizeOrder('cod', extractedData);
                 };
                 
                 form.addEventListener('submit', handleCustomSubmit);
@@ -538,8 +540,8 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
     const parsePrice = (val?: string | number) => {
         if (val === undefined || val === null) return 0;
         const str = String(val)
-            .replace(/[^\d,.]/g, '') // Rimuove tutto tranne numeri, virgole e punti
-            .replace(',', '.');       // Sostituisce la virgola con il punto
+            .replace(/[^\d,.]/g, '') 
+            .replace(',', '.');       
         const num = parseFloat(str);
         return isNaN(num) ? 0 : num;
     }
@@ -558,7 +560,7 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
         return total.toFixed(2);
     };
 
-    const finalizeOrder = (method: 'cod' | 'card', customData?: { name?: string, phone?: string }) => {
+    const finalizeOrder = async (method: 'cod' | 'card', manualData?: Record<string, string>) => {
         setIsLoading(true);
 
         if (onPurchase) {
@@ -566,22 +568,11 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
         }
         
         const totalPrice = calculateTotal();
+        const currentData = manualData || formData;
         
-        // WORLD CLASS EXTRACTION: Supporting multiple field names for both custom and built-in forms
-        const currentName = customData?.name || 
-                           formData.name || 
-                           formData.first_name || 
-                           formData.full_name || 
-                           formData.nome || 
-                           '';
-                           
-        const currentPhone = customData?.phone || 
-                            formData.phone || 
-                            formData.tel || 
-                            formData.telefono || 
-                            formData.mobile || 
-                            formData.cellulare || 
-                            '';
+        // SENIOR EXTRACTION: Ensure data is flat and clearly named for Make.com
+        const currentName = currentData.name || currentData.nome || currentData.full_name || '';
+        const currentPhone = currentData.phone || currentData.telefono || currentData.tel || '';
 
         const payloadData: Record<string, any> = {
             event_type: 'new_order',
@@ -596,27 +587,58 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
             shipping_insurance_cost: (isInsuranceChecked && content.insuranceConfig?.enabled) ? `${content.insuranceConfig.cost} ${currency}` : '0',
             gadget_selected: isGadgetChecked ? 'yes' : 'no',
             gadget_cost: (isGadgetChecked && content.gadgetConfig?.enabled) ? `${content.gadgetConfig.cost} ${currency}` : '0',
-            ...formData,
+            // Spread all form data to ensure custom fields are sent
+            ...currentData,
+            // Ensure core fields are mapped to standard names too
             name: currentName,
             phone: currentPhone
         };
-        const urlParams = new URLSearchParams();
-        Object.entries(payloadData).forEach(([key, value]) => urlParams.append(key, String(value)));
 
         if (content.webhookUrl && content.webhookUrl.trim() !== '') {
-            fetch(content.webhookUrl, { method: 'POST', body: urlParams, mode: 'no-cors' })
-                .catch(err => console.error("Webhook send error (non-blocking):", err));
+            const webhookUrl = content.webhookUrl.trim();
+            const bodyJSON = JSON.stringify(payloadData);
+            
+            // --- TRIPLE DELIVERY STRATEGY ---
+            
+            // 1. BEACON (JSON): Safest for Unload
+            if (navigator.sendBeacon) {
+                try {
+                    const blob = new Blob([bodyJSON], { type: 'application/json' });
+                    navigator.sendBeacon(webhookUrl, blob);
+                } catch (e) {
+                    console.warn("Beacon delivery failed", e);
+                }
+            }
+
+            // 2. FETCH (JSON): Modern Standard (no-cors is removed because Make handles CORS correctly)
+            // Removing no-cors allows application/json header to be sent properly.
+            fetch(webhookUrl, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' },
+                body: bodyJSON,
+                keepalive: true 
+            }).catch(err => console.debug("Webhook Fetch JSON failed (expected if CORS missing, but Make usually allows it)", err));
+
+            // 3. FETCH (FORM-ENCODED): Maximum Compatibility fallback
+            const formParams = new URLSearchParams();
+            Object.entries(payloadData).forEach(([k, v]) => formParams.append(k, String(v)));
+            fetch(webhookUrl, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formParams.toString(),
+                keepalive: true
+            }).catch(() => {});
         }
 
-        trackEvent('Lead', { content_id: contentId }, { email: formData.email, phone: currentPhone });
-        trackEvent('Contact', {}, { email: formData.email, phone: currentPhone });
+        trackEvent('Lead', { content_id: contentId }, { email: currentData.email, phone: currentPhone });
+        trackEvent('Contact', {}, { email: currentData.email, phone: currentPhone });
         
+        // BUFFER: Wait enough for the browser network stack to flush requests
+        await new Promise(resolve => setTimeout(resolve, 800));
+
         try {
-            // REDIRECT LOGIC: Handling external redirect with parameter forwarding
             if (content.customThankYouUrl && content.customThankYouUrl.trim() !== '') {
                 let baseUrl = content.customThankYouUrl.trim();
-                
-                // Placeholder Replacement Support: replace {name}, {phone}, etc if present in the URL string
                 baseUrl = baseUrl
                     .replace('{name}', encodeURIComponent(currentName))
                     .replace('{phone}', encodeURIComponent(currentPhone))
@@ -629,12 +651,10 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
                 
                 try {
                     const targetUrl = new URL(baseUrl);
-                    // Standard Query Param Forwarding
                     if (currentName) targetUrl.searchParams.set('name', currentName);
                     if (currentPhone) targetUrl.searchParams.set('phone', currentPhone);
                     window.location.href = targetUrl.toString();
                 } catch (urlErr) {
-                    // Fallback for non-standard URL strings
                     const separator = baseUrl.includes('?') ? '&' : '?';
                     const params = `name=${encodeURIComponent(currentName)}&phone=${encodeURIComponent(currentPhone)}`;
                     window.location.href = `${baseUrl}${separator}${params}`;
@@ -642,14 +662,12 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
                 return;
             }
 
-            // PREVIEW MODE: SPA-like navigation
             if (onRedirect) {
                 onRedirect({ name: currentName, phone: currentPhone, price: totalPrice });
                 onClose();
                 return;
             }
 
-            // LIVE MODE: Full page navigation
             if (thankYouSlug) {
                 const url = new URL(window.location.origin + window.location.pathname);
                 url.searchParams.set('s', thankYouSlug.replace(/^\//, ''));
@@ -659,7 +677,6 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
                 return;
             }
             
-            // Fallback: If no thankYouSlug provided, try using standard query param routing
             const url = new URL(window.location.href);
             url.searchParams.set('s', (thankYouSlug || '').replace(/^\//, ''));
             if (currentName) url.searchParams.set('name', currentName);
@@ -688,12 +705,6 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
     const handleSwitchToCod = () => { setPaymentMethod('cod'); setShowCardErrorModal(false); finalizeOrder('cod'); };
     const handleGiveUp = () => { setShowCardErrorModal(false); onClose(); };
 
-    const PriceDisplay = ({ p, op }: { p: string, op?: string }) => (
-        <div className="text-slate-900 font-bold text-lg">
-            {labels.currencyPos === 'before' ? `${currency} ${p}` : `${p} ${currency}`}
-            {op && <span className="text-slate-400 text-xs line-through font-normal ml-1">{labels.currencyPos === 'before' ? `${currency} ${op}` : `${op} ${currency}`}</span>}
-        </div>
-    );
     const inputClass = "w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 outline-none transition bg-white text-slate-900 placeholder:text-slate-400 text-sm font-medium";
 
     const hfConfig = content.htmlFormConfig || { showName: true, showProductLine: true, showTotalLine: true };
@@ -715,7 +726,7 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
                         <h3 className="text-2xl font-black text-slate-900 mb-2">{labels.cardErrorTitle}</h3>
                         <p className="text-slate-600 mb-8 max-w-xs leading-relaxed">{labels.cardErrorMsg}</p>
                         <div className="w-full space-y-3">
-                            <button onClick={handleSwitchToCod} className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold py-4 rounded-xl shadow-lg transform active:scale-[0.98] transition-all flex flex-col items-center justify-center relative border-2 border-emerald-400/50">
+                            <button onClick={handleSwitchToCod} className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-700 text-white font-bold py-4 rounded-xl shadow-lg transform active:scale-[0.98] transition-all flex items-center justify-center relative border-2 border-emerald-400/50">
                                 <div className="flex items-center gap-2 text-lg"><Truck className="w-5 h-5" /> {labels.switchToCod}</div>
                                 <div className="absolute -top-3 right-4 bg-yellow-400 text-yellow-900 text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wide shadow-sm">{labels.mostPopular}</div>
                             </button>
@@ -825,7 +836,6 @@ const OrderPopup: React.FC<{ isOpen: boolean; onClose: () => void; content: Gene
                                         <input type="radio" name="payment" value="cod" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} className="w-4 h-4 text-slate-900 accent-slate-900"/>
                                         <div className="ml-3 flex-1"><div className="flex items-center justify-between"><span className="font-bold text-slate-900 text-sm">{labels.cod}</span><Banknote className="w-5 h-5 text-slate-600" /></div></div>
                                     </label>
-                                    {/* FIX: Removed invalid setEditingMode call and fixed syntax error where radio input was not properly closed and contained other elements */}
                                     <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition-all ${paymentMethod === 'card' ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900' : 'border-slate-200 hover:border-slate-300'}`}>
                                         <input type="radio" name="payment" value="card" checked={paymentMethod === 'card'} onChange={() => setPaymentMethod('card')} className="w-4 h-4 text-slate-900 accent-slate-900"/>
                                         <div className="ml-3 flex-1">
@@ -898,21 +908,16 @@ export const ThankYouPage: React.FC<{ content: GeneratedContent; initialData?: O
     const phone = initialData?.phone || params.get('phone') || '...';
     const labels = { ...DEFAULT_LABELS, ...(content.uiTranslation || {}) };
 
-    // The component now uses its own headline and subheadline for content.
     const titleTemplate = content.headline || labels.thankYouTitle;
     const msgTemplate = content.subheadline || labels.thankYouMsg;
 
-    // Fix: Replace all variables in both strings
     const finalTitle = titleTemplate.replace('{name}', name).replace('{phone}', phone);
     const finalMsg = msgTemplate.replace('{name}', name).replace('{phone}', phone);
     
-    // Support for solid or gradient backgrounds
     const backgroundStyle = content.backgroundColor ? { background: content.backgroundColor } : {};
     const heroImage = content.heroImageBase64 || (content.generatedImages && content.generatedImages.length > 0 ? content.generatedImages[0] : null);
 
-
     useEffect(() => {
-        // Scripts are now sourced from the thank_you_content object
         if (content.customThankYouHtml) injectCustomScript(content.customThankYouHtml);
         if (content.metaThankYouHtml) injectCustomScript(content.metaThankYouHtml);
         if (content.tiktokThankYouHtml) injectCustomScript(content.tiktokThankYouHtml);
@@ -968,7 +973,8 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
     const [socialNotification, setSocialNotification] = useState<{visible: boolean, name: string, city: string} | null>(null);
     const spConfig = content.socialProofConfig || { enabled: true, intervalSeconds: 10, maxShows: 4 };
     
-    // Lightbox State
+    const [visibleReviewsCount, setVisibleReviewsCount] = useState(50);
+    const reviewsToShow = reviews.slice(0, visibleReviewsCount);
     const [activeReviewImage, setActiveReviewImage] = useState<string | null>(null);
 
     useEffect(() => {
@@ -978,7 +984,7 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
         const intervalTime = Math.max(2, spConfig.intervalSeconds) * 1000;
         const lang = content.language || 'Italiano';
         const culture = getCulturalData(lang);
-        const getRandomItem = (arr: string[]) => arr[Math.floor(arr.length)];
+        const getRandomItem = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
         const interval = setInterval(() => {
             if (iterations >= maxIterations) { clearInterval(interval); return; }
             const name = getRandomItem(culture.names);
@@ -1007,7 +1013,6 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
     const smallStyle = content.customTypography?.small ? { fontSize: `${content.customTypography.small}px` } : {};
     const ctaStyle = content.customTypography?.cta ? { fontSize: `${content.customTypography.cta}px` } : {};
     
-    // Apply background color or gradient if present, else default
     const backgroundStyle = content.backgroundColor ? { background: content.backgroundColor } : {};
     
     const priceStyle = {
@@ -1029,13 +1034,12 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
         </div>
     );
 
-    // Reviews Section (to reuse)
     const ReviewsSection = () => (
         <div className="bg-white rounded-none md:rounded-3xl p-6 md:p-12 md:shadow-xl md:border border-slate-100 mb-20 relative overflow-hidden border-t border-slate-100 md:border-t-0">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-500 md:h-2"></div>
             <h3 className="text-center text-2xl md:text-3xl font-bold mb-8 text-slate-900" style={h2Style}>{labels.reviews}</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-                {reviews.map((review, i) => (
+                {reviewsToShow.map((review, i) => (
                     <div key={i} className="flex flex-col h-full bg-slate-50 p-5 rounded-xl border border-slate-100">
                         <div className="flex items-center justify-between mb-3">
                             <div className="flex text-green-500">
@@ -1044,7 +1048,6 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
                             <span className="text-[10px] text-slate-400 font-mono">{review.date}</span>
                         </div>
                         
-                        {/* Render Images: Priority to multiple images array */}
                         {(review.images && review.images.length > 0) ? (
                             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide mb-3">
                                 {review.images.filter(img => img && img.trim() !== '').map((img, imgIdx) => (
@@ -1088,10 +1091,20 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
                     </div>
                 ))}
             </div>
+            {reviews.length > visibleReviewsCount && (
+                <div className="mt-12 text-center">
+                    <button 
+                        onClick={() => setVisibleReviewsCount(prev => prev + 50)}
+                        className="bg-white border-2 border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 px-8 py-3 rounded-xl font-bold transition-all shadow-sm flex items-center gap-2 mx-auto"
+                    >
+                        <RefreshCcw className="w-4 h-4" />
+                        Mostra altre recensioni (+50)
+                    </button>
+                </div>
+            )}
         </div>
     );
 
-    // Box Content Section (Cosa Ricevi)
     const BoxContentSection = () => {
         if (!content.boxContent || !content.boxContent.enabled) return null;
         
@@ -1126,7 +1139,6 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
         );
     };
 
-    // Feature Block Component
     const FeatureBlock = React.memo(({ f, i }: { f: any, i: number }) => (
         <div className={`flex flex-col gap-6 md:gap-16 items-center ${i % 2 !== 0 ? 'md:flex-row-reverse' : 'md:flex-row'} bg-white md:bg-transparent p-0 md:p-0 rounded-2xl shadow-none md:shadow-none`}>
             <div className="w-full md:w-1/2">
@@ -1161,7 +1173,6 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
         </div>
     ));
 
-    // Split features based on reviews position
     const reviewsPos = content.reviewsPosition === undefined ? content.features.length : content.reviewsPosition;
     const featuresBefore = content.features.slice(0, reviewsPos);
     const featuresAfter = content.features.slice(reviewsPos);
@@ -1183,7 +1194,13 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
                                 <div className="flex text-yellow-400">{[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 fill-current" />)}</div>
                                 <span className="text-sm text-slate-500 font-medium underline decoration-slate-300 decoration-dotted underline-offset-2" style={smallStyle}>4.9/5 - {reviews.length} {labels.reviews}</span>
                             </div>
-                            {content.showSocialProofBadge !== false && (<SocialProofBadge language={content.language || 'Italiano'} text={labels.socialProof} />)}
+                            {content.showSocialProofBadge !== false && (
+                                <SocialProofBadge 
+                                    language={content.language || 'Italiano'} 
+                                    defaultText={labels.socialProof} 
+                                    config={content.socialProofBadgeConfig}
+                                />
+                            )}
                         </div>
                         <div className={`${offerBoxClass} w-full mt-2`}>
                              <div className="absolute top-0 right-0 bg-red-500 text-white text-[9px] font-bold px-2 py-1 rounded-bl-lg uppercase z-10">{labels.offer}</div>
@@ -1193,7 +1210,7 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
                                      <span className="text-xs font-bold text-red-600 uppercase tracking-wide">{content.stockConfig.textOverride ? content.stockConfig.textOverride.replace('{x}', currentStock.toString()) : labels.onlyLeft.replace('{x}', currentStock.toString())}</span>
                                  </div>
                              )}
-                             <div className="flex flex-wrap items-center justify-center gap-4 mb-4 bg-white p-3 rounded-lg border border-slate-100 shadow-sm mt-2 relative z-0 w-full">
+                             <div className="flex wrap items-center justify-center gap-4 mb-4 bg-white p-3 rounded-lg border border-slate-100 shadow-sm mt-2 relative z-0 w-full">
                                 <PriceDisplay p={content.price || "39"} op={content.originalPrice || "79"} big={true} />
                              </div>
                              <div className="bg-blue-100/50 text-blue-900 text-center text-sm font-bold py-2.5 rounded border border-blue-200/50 mb-4 flex items-center justify-center gap-2 w-full">
@@ -1230,18 +1247,11 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
                     <div className="text-center max-w-3xl mx-auto mb-8 md:mb-12">
                          <h2 className={`font-bold text-slate-900 mb-2 ${styles.h2}`} style={h2Style}>{labels.techDesign}</h2>
                     </div>
-                    {/* Render first chunk of features */}
                     {featuresBefore.map((f, i) => (
                         <FeatureBlock key={i} f={f} i={i} />
                     ))}
-                    
-                    {/* Box Content inserted before Reviews */}
                     <BoxContentSection />
-
-                    {/* Reviews inserted here if strictly inside text */}
                     {reviews.length > 0 && <ReviewsSection />}
-
-                    {/* Render remaining features */}
                     {featuresAfter.map((f, i) => (
                         <FeatureBlock key={i + featuresBefore.length} f={f} i={i + featuresBefore.length} />
                     ))}
@@ -1254,7 +1264,7 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
                         <div className="text-[10px] text-slate-400 text-justify leading-relaxed mb-6 space-y-2" style={smallStyle}>
                             <p>{labels.legalDisclaimer}</p>
                         </div>
-                        <div className="flex flex-wrap justify-center gap-6 mb-8">
+                        <div className="flex wrap justify-center gap-6 mb-8">
                             <button onClick={() => setActiveLegalModal('Privacy Policy')} className="text-xs text-slate-500 hover:text-slate-900 font-bold hover:underline" style={smallStyle}>{labels.privacyPolicy}</button>
                             <button onClick={() => setActiveLegalModal('Termini')} className="text-xs text-slate-500 hover:text-slate-900 font-bold hover:underline" style={smallStyle}>{labels.termsConditions}</button>
                             <button onClick={() => setActiveLegalModal('Cookie Policy')} className="text-xs text-slate-500 hover:text-slate-900 font-bold hover:underline" style={smallStyle}>{labels.cookiePolicy}</button>
@@ -1279,7 +1289,9 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
                                  <span className="text-xs text-slate-800 font-bold">{socialNotification.name}</span>
                                  <span className="flex items-center gap-0.5 bg-emerald-100 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-[4px] text-[8px] font-bold uppercase tracking-wide leading-none"><ShieldCheck className="w-2.5 h-2.5" />{labels.certified}</span>
                              </div>
-                             <p className="text-[10px] text-slate-500 font-medium leading-tight">{getCulturalData(content.language || 'Italiano').action} {getCulturalData(content.language || 'Italiano').from} <span className="font-semibold">{socialNotification.city}</span></p>
+                             <div className="text-[10px] text-slate-500 font-medium leading-tight">
+                                {getCulturalData(content.language || 'Italiano').action} {getCulturalData(content.language || 'Italiano').from} <span className="font-semibold">{socialNotification.city}</span>
+                             </div>
                          </div>
                     </div>
                 </div>
@@ -1301,7 +1313,6 @@ const GadgetTemplate: React.FC<TemplateProps> = ({ content, onBuy, styles }) => 
             </div>
             <LegalModal isOpen={!!activeLegalModal} onClose={() => setActiveLegalModal(null)} title={activeLegalModal === 'Privacy Policy' ? labels.privacyPolicy : (activeLegalModal === 'Termini' ? labels.termsConditions : labels.cookiePolicy)} contentText="Lorem ipsum dolor sit amet..." disclaimer={labels.legalDisclaimer}/>
             
-            {/* REVIEW IMAGE LIGHTBOX */}
             {activeReviewImage && (
                 <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setActiveReviewImage(null)}>
                     <button className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition">

@@ -1,13 +1,13 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { ProductDetails, GeneratedContent, FormFieldConfig, Testimonial, UiTranslation, PageTone } from "../types";
+import { ProductDetails, GeneratedContent, FormFieldConfig, Testimonial, UiTranslation, PageTone, AIImageStyle } from "../types";
 
 const DISCLAIMER_BASE = "Il nostro sito web agisce esclusivamente come affiliato e si concentra sulla promozione dei prodotti tramite campagne pubblicitarie. Non ci assumiamo alcuna responsabilità per la spedizione, la qualità o qualsiasi altra questione riguardante i prodotti venduti tramite link di affiliazione. Ti preghiamo di notare che le immagini utilizzate a scopo illustrativo potrebbero non corrispondere alla reale immagine del prodotto acquistato. Ti invitiamo a contattare il servizio assistenza clienti dopo aver inserito i dati nel modulo per chiedere qualsiasi domanda o informazione sul prodotto prima di confermare l’ordine. Ti informiamo inoltre che i prodotti in omaggio proposti sul sito possono essere soggetti a disponibilità limitata, senza alcuna garanzia di disponibilità da parte del venditore che spedisce il prodotto. Ricorda che, qualora sorgessero problemi relativi alle spedizioni o alla qualità dei prodotti, la responsabilità ricade direttamente sull’azienda fornitrice.";
 
 const getLegalTranslation = (lang: string): string => {
     const translations: Record<string, string> = {
         'Italiano': DISCLAIMER_BASE,
-        'Inglese': "Our website acts exclusively as an affiliate and focuses on promoting products through advertising campaigns. We assume no responsibility for shipping, quality, or any other issue regarding products sold through affiliate links...",
+        'Inglese': "Our website acts exclusively as an affiliate and focuses on promoting products through advertising campaigns. We assume no responsibility for shipping, quality, or any other issue regarding products sold through affiliate links. Please note that the images used for illustrative purposes may not correspond to the real image of the purchased product. We invite you to contact customer service after entering the data in the form to ask any questions or information about the product before confirming the order.",
     };
     return translations[lang] || translations['Italiano'];
 };
@@ -40,8 +40,21 @@ export const getLanguageConfig = (lang: string) => {
         'Inglese': { currency: '$', locale: 'en-US', country: 'USA' },
         'Francese': { currency: '€', locale: 'fr-FR', country: 'Francia' },
         'Tedesco': { currency: '€', locale: 'de-DE', country: 'Germania' },
+        'Spagnolo': { currency: '€', locale: 'es-ES', country: 'Spagna' },
+        'Rumeno': { currency: 'lei', locale: 'ro-RO', country: 'Romania' },
+        'Polacco': { currency: 'zł', locale: 'pl-PL', country: 'Polonia' },
+        'Svedese': { currency: 'kr', locale: 'sv-SE', country: 'Svezia' },
+        'Bulgaro': { currency: 'лв', locale: 'bg-BG', country: 'Bulgaria' },
+        'Ungherese': { currency: 'Ft', locale: 'hu-HU', country: 'Ungheria' },
+        'Greco': { currency: '€', locale: 'el-GR', country: 'Grecia' },
+        'Croato': { currency: '€', locale: 'hr-HR', country: 'Croazia' },
     };
-    return configs[lang] || configs['Italiano'];
+    return configs[lang] || { currency: '€', locale: 'en-US', country: 'International' };
+};
+
+const cleanJson = (text: any) => {
+    if (typeof text !== 'string') return '{}';
+    return text.replace(/```json/g, '').replace(/```/g, '').trim();
 };
 
 export const generateLandingPage = async (product: ProductDetails, reviewCount: number): Promise<GeneratedContent> => {
@@ -56,9 +69,13 @@ export const generateLandingPage = async (product: ProductDetails, reviewCount: 
     Tone: ${product.tone}
     Language: ${product.language}
     Features Count: ${product.featureCount || 3}
-    
-    The JSON must follow the GeneratedContent interface structure exactly. 
-    Use a professional and persuasive marketing copy.`;
+    Currency Symbol: ${langConfig.currency}
+
+    CRITICAL INSTRUCTION: All generated text MUST be in ${product.language}. 
+    Translate EVERYTHING into ${product.language}, including internal labels and UI elements. 
+    Ensure no Italian words remain.
+    The JSON must follow the GeneratedContent interface structure.
+    Also provide a fully translated 'uiTranslation' object based on common e-commerce terms in ${product.language}.`;
 
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -73,6 +90,7 @@ export const generateLandingPage = async (product: ProductDetails, reviewCount: 
                     ctaText: { type: Type.STRING },
                     ctaSubtext: { type: Type.STRING },
                     announcementBarText: { type: Type.STRING },
+                    featuresSectionTitle: { type: Type.STRING },
                     benefits: { type: Type.ARRAY, items: { type: Type.STRING } },
                     features: {
                         type: Type.ARRAY,
@@ -86,29 +104,32 @@ export const generateLandingPage = async (product: ProductDetails, reviewCount: 
                             required: ["title", "description"]
                         }
                     },
-                    testimonials: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                name: { type: Type.STRING },
-                                title: { type: Type.STRING },
-                                text: { type: Type.STRING },
-                                rating: { type: Type.NUMBER },
-                                date: { type: Type.STRING },
-                                role: { type: Type.STRING }
-                            }
+                    uiTranslation: { 
+                        type: Type.OBJECT,
+                        properties: {
+                            shippingInsurance: { type: Type.STRING },
+                            gadgetLabel: { type: Type.STRING },
+                            nameLabel: { type: Type.STRING },
+                            phoneLabel: { type: Type.STRING },
+                            addressLabel: { type: Type.STRING },
+                            cityLabel: { type: Type.STRING },
+                            capLabel: { type: Type.STRING },
+                            provinceLabel: { type: Type.STRING },
+                            addressNumberLabel: { type: Type.STRING },
+                            legalDisclaimer: { type: Type.STRING },
+                            thankYouTitle: { type: Type.STRING },
+                            thankYouMsg: { type: Type.STRING }
                         }
                     },
                     price: { type: Type.STRING },
                     originalPrice: { type: Type.STRING },
                 },
-                required: ["headline", "subheadline", "ctaText", "benefits", "features"]
+                required: ["headline", "subheadline", "ctaText", "benefits", "features", "uiTranslation"]
             }
         }
     });
 
-    const baseContent = JSON.parse(response.text || '{}') as GeneratedContent;
+    const baseContent = JSON.parse(cleanJson(response.text || '{}')) as any;
     
     return {
         ...baseContent,
@@ -121,52 +142,42 @@ export const generateLandingPage = async (product: ProductDetails, reviewCount: 
         buttonColor: 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-200',
         stockConfig: { enabled: true, quantity: 13 },
         socialProofConfig: { enabled: true, intervalSeconds: 10, maxShows: 4 },
-        insuranceConfig: { enabled: true, label: "Assicurazione Spedizione", cost: "4.90", defaultChecked: true },
-        gadgetConfig: { enabled: true, label: "Gadget Omaggio", cost: "0.00", defaultChecked: true },
+        insuranceConfig: { enabled: true, label: baseContent.uiTranslation?.shippingInsurance || "Assicurazione Spedizione", cost: "4.90", defaultChecked: true },
+        gadgetConfig: { enabled: true, label: baseContent.uiTranslation?.gadgetLabel || "Gadget Omaggio", cost: "0.00", defaultChecked: true },
         formConfiguration: [
-            { id: 'name', label: 'Nome e Cognome', enabled: true, required: true, type: 'text', width: 12 },
-            { id: 'phone', label: 'Telefono', enabled: true, required: true, type: 'tel', width: 12 },
-            { id: 'address', label: 'Indirizzo', enabled: true, required: true, type: 'text', width: 9 },
-            { id: 'address_number', label: 'N° Civico', enabled: true, required: true, type: 'text', width: 3 },
-            { id: 'city', label: 'Città', enabled: true, required: true, type: 'text', width: 8 },
-            { id: 'province', label: 'Provincia (Sigla)', enabled: true, required: true, type: 'text', width: 4 },
-            { id: 'cap', label: 'CAP', enabled: true, required: true, type: 'text', width: 12 },
+            { id: 'name', label: baseContent.uiTranslation?.nameLabel || 'Nome e Cognome', enabled: true, required: true, type: 'text', width: 12 },
+            { id: 'phone', label: baseContent.uiTranslation?.phoneLabel || 'Telefono', enabled: true, required: true, type: 'tel', width: 12 },
+            { id: 'address', label: baseContent.uiTranslation?.addressLabel || 'Indirizzo', enabled: true, required: true, type: 'text', width: 9 },
+            { id: 'address_number', label: baseContent.uiTranslation?.addressNumberLabel || 'N° Civico', enabled: true, required: true, type: 'text', width: 3 },
+            { id: 'city', label: baseContent.uiTranslation?.cityLabel || 'Città', enabled: true, required: true, type: 'text', width: 8 },
+            { id: 'province', label: baseContent.uiTranslation?.provinceLabel || 'Provincia (Sigla)', enabled: true, required: true, type: 'text', width: 4 },
+            { id: 'cap', label: baseContent.uiTranslation?.capLabel || 'CAP', enabled: true, required: true, type: 'text', width: 12 },
         ],
         uiTranslation: {
             ...COMMON_UI_DEFAULTS,
-            reviews: "Recensioni",
-            offer: "Offerta",
-            onlyLeft: "Solo {x} rimasti",
-            secure: "Sicuro",
-            returns: "Resi",
-            original: "Originale",
-            express: "Espresso",
-            warranty: "Garanzia",
-            checkoutHeader: "Checkout",
-            paymentMethod: "Metodo Pagamento",
-            cod: "Pagamento alla Consegna",
-            shippingInfo: "Info Spedizione",
-            completeOrder: "Completa Ordine",
-            orderReceived: "Ordine Ricevuto",
-            orderReceivedMsg: "Il tuo ordine è stato ricevuto con successo.",
-            techDesign: "Tecnologia & Design",
-            discountLabel: "-50%",
-            certified: "Acquisto Verificato",
-            currencyPos: 'after',
-            legalDisclaimer: getLegalTranslation(product.language),
-            privacyPolicy: "Privacy Policy",
-            termsConditions: "Termini e Condizioni",
-            cookiePolicy: "Cookie Policy",
-            rightsReserved: "Tutti i diritti riservati.",
-            generatedPageNote: "Pagina generata con AI.",
+            ...baseContent.uiTranslation,
+            currencyPos: langConfig.currency === 'lei' || langConfig.currency === 'zł' || langConfig.currency === 'Ft' ? 'after' : 'before',
+            legalDisclaimer: baseContent.uiTranslation?.legalDisclaimer || getLegalDisclaimerForLanguage(product.language),
         } as UiTranslation
     };
 };
 
+const getLegalDisclaimerForLanguage = (lang: string): string => {
+    const disclaimers: Record<string, string> = {
+        'Italiano': DISCLAIMER_BASE,
+        'Inglese': "Our website acts exclusively as an affiliate and focuses on promoting products through advertising campaigns. We assume no responsibility for shipping, quality, or any other issue regarding products sold through affiliate links. Please note that the images used for illustrative purposes may not correspond to the real image of the purchased product. We invite you to contact customer service after entering the data in the form to ask any questions or information about the product before confirming the order.",
+    };
+    return disclaimers[lang] || disclaimers['Italiano'];
+};
+
 export const generateReviews = async (productName: string, lang: string, count: number): Promise<Testimonial[]> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `Generate ${count} customer reviews for a product named "${productName}" in ${lang}. 
-    Return as a JSON array of objects with name, title, text, rating (1-5), date, and role.`;
+    
+    const prompt = `Generate EXACTLY ${count} short, realistic customer reviews for a product named "${productName}" in ${lang}. 
+    Ensure variety in user names and opinions (mostly positive, some neutral). 
+    IMPORTANT: You must provide exactly ${count} objects in the JSON array. Do not skip any.
+    Return as a JSON array of objects with name, title, text, rating (1-5), date, and role.
+    Ensure names are culturally appropriate for ${lang} speakers.`;
 
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -190,65 +201,262 @@ export const generateReviews = async (productName: string, lang: string, count: 
         }
     });
 
-    return JSON.parse(response.text || '[]');
+    const reviews = JSON.parse(cleanJson(response.text || '[]'));
+    return reviews.slice(0, count);
 };
 
 export const translateLandingPage = async (content: GeneratedContent, targetLang: string): Promise<GeneratedContent> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `Translate the following landing page content to ${targetLang}. 
-    Preserve the JSON structure exactly. Content: ${JSON.stringify(content)}`;
+    const langConfig = getLanguageConfig(targetLang);
+
+    const featuresToMap = content.features || [];
+    const testimonialsToMap = content.testimonials || [];
+    const benefitsToMap = content.benefits || [];
+
+    const textFieldsToTranslate = {
+        headline: content.headline || '',
+        subheadline: content.subheadline || '',
+        ctaText: content.ctaText || '',
+        ctaSubtext: content.ctaSubtext || '',
+        announcementBarText: content.announcementBarText || '',
+        benefits: benefitsToMap,
+        features: featuresToMap.map(f => ({ title: f.title, description: f.description })),
+        testimonials: testimonialsToMap.map(t => ({ name: t.name, title: t.title, text: t.text, role: t.role })),
+        uiTranslation: content.uiTranslation || {},
+        boxContent: content.boxContent ? { title: content.boxContent.title, items: content.boxContent.items } : undefined,
+        formLabels: content.formConfiguration?.map(f => ({ id: f.id, label: f.label })),
+        insuranceLabel: content.insuranceConfig?.label,
+        gadgetLabel: content.gadgetConfig?.label
+    };
+
+    const prompt = `Translate the following landing page content into native, high-converting ${targetLang}. 
+    CRITICAL: 
+    1. Translate EVERY string value. No Italian allowed.
+    2. The 'legalDisclaimer' must be a formal legal translation in ${targetLang}.
+    3. Currency for this language is ${langConfig.currency}.
+    4. Maintain the professional/persuasive marketing tone.
+    
+    Content: ${JSON.stringify(textFieldsToTranslate)}`;
 
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: { responseMimeType: "application/json" }
-    });
-
-    return JSON.parse(response.text || JSON.stringify(content));
-};
-
-export const generateActionImages = async (product: ProductDetails): Promise<string> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
-    // Preparation of context parts
-    const parts: any[] = [
-        { text: `Genera un'immagine pubblicitaria professionale e accattivante per il prodotto: ${product.name}. 
-        Descrizione: ${product.description}. 
-        L'immagine deve essere in alta risoluzione, stile e-commerce premium, pronta per una landing page di vendita.` }
-    ];
-
-    // If we have an existing image, send it as reference
-    if (product.images && product.images.length > 0) {
-        const refImg = product.images[0];
-        if (refImg.startsWith('data:')) {
-            const [mimeInfo, base64Data] = refImg.split(';base64,');
-            const mimeType = mimeInfo.replace('data:', '');
-            parts.push({
-                inlineData: {
-                    data: base64Data,
-                    mimeType: mimeType
+        config: { 
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    headline: { type: Type.STRING },
+                    subheadline: { type: Type.STRING },
+                    ctaText: { type: Type.STRING },
+                    ctaSubtext: { type: Type.STRING },
+                    announcementBarText: { type: Type.STRING },
+                    benefits: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    features: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                title: { type: Type.STRING },
+                                description: { type: Type.STRING }
+                            }
+                        }
+                    },
+                    testimonials: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                name: { type: Type.STRING },
+                                title: { type: Type.STRING },
+                                text: { type: Type.STRING },
+                                role: { type: Type.STRING }
+                            }
+                        }
+                    },
+                    uiTranslation: { 
+                        type: Type.OBJECT,
+                        properties: {
+                            legalDisclaimer: { type: Type.STRING },
+                            thankYouTitle: { type: Type.STRING },
+                            thankYouMsg: { type: Type.STRING },
+                            shippingInsurance: { type: Type.STRING },
+                            gadgetLabel: { type: Type.STRING }
+                        }
+                    },
+                    formLabels: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                id: { type: Type.STRING },
+                                label: { type: Type.STRING }
+                            }
+                        }
+                    }
                 }
-            });
-            parts[0].text += " Prendi ispirazione dall'immagine fornita per quanto riguarda l'aspetto del prodotto.";
-        }
-    }
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts },
-        config: {
-            imageConfig: {
-                aspectRatio: "1:1",
-                imageSize: "1K"
             }
         }
     });
 
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) {
-            return `data:image/png;base64,${part.inlineData.data}`;
+    const translatedFields = JSON.parse(cleanJson(response.text || '{}'));
+    
+    return {
+        ...content,
+        ...translatedFields,
+        language: targetLang,
+        currency: langConfig.currency,
+        features: featuresToMap.map((f, idx) => ({
+            ...f,
+            title: translatedFields.features?.[idx]?.title || f.title,
+            description: translatedFields.features?.[idx]?.description || f.description
+        })),
+        testimonials: testimonialsToMap.map((t, idx) => ({
+            ...t,
+            name: translatedFields.testimonials?.[idx]?.name || t.name,
+            title: translatedFields.testimonials?.[idx]?.title || t.title,
+            text: translatedFields.testimonials?.[idx]?.text || t.text,
+            role: translatedFields.testimonials?.[idx]?.role || t.role
+        })),
+        formConfiguration: content.formConfiguration?.map((field) => {
+            const translatedLabel = translatedFields.formLabels?.find((fl: any) => fl.id === field.id)?.label;
+            return { ...field, label: translatedLabel || field.label };
+        }),
+        insuranceConfig: content.insuranceConfig ? {
+            ...content.insuranceConfig,
+            label: translatedFields.uiTranslation?.shippingInsurance || content.insuranceConfig.label
+        } : undefined,
+        gadgetConfig: content.gadgetConfig ? {
+            ...content.gadgetConfig,
+            label: translatedFields.uiTranslation?.gadgetLabel || content.gadgetConfig.label
+        } : undefined,
+        uiTranslation: {
+            ...COMMON_UI_DEFAULTS,
+            ...(content.uiTranslation || {}),
+            ...translatedFields.uiTranslation,
+            currencyPos: langConfig.currency === '€' || langConfig.currency === '$' ? 'before' : 'after'
         }
-    }
+    };
+};
 
-    throw new Error("Impossibile generare l'immagine AI.");
+export const rewriteLandingPage = async (content: GeneratedContent, targetTone: PageTone): Promise<GeneratedContent> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const textFieldsToRewrite = {
+        headline: content.headline || '',
+        subheadline: content.subheadline || '',
+        ctaText: content.ctaText || '',
+        ctaSubtext: content.ctaSubtext || '',
+        benefits: content.benefits || [],
+        features: content.features?.map(f => ({ title: f.title, description: f.description })) || [],
+    };
+
+    const prompt = `Rewrite the following landing page content using a ${targetTone} tone. 
+    Maintain the current language (${content.language}). 
+    The goal is to increase conversions by adapting the persuasive style to the requested tone.
+    Do not change the technical features of the product, only the creative copywriting.
+    
+    Content: ${JSON.stringify(textFieldsToRewrite)}`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: { 
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    headline: { type: Type.STRING },
+                    subheadline: { type: Type.STRING },
+                    ctaText: { type: Type.STRING },
+                    ctaSubtext: { type: Type.STRING },
+                    benefits: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    features: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                title: { type: Type.STRING },
+                                description: { type: Type.STRING }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    const rewrittenFields = JSON.parse(cleanJson(response.text || '{}'));
+    
+    return {
+        ...content,
+        ...rewrittenFields,
+        features: content.features?.map((f, idx) => ({
+            ...f,
+            title: rewrittenFields.features?.[idx]?.title || f.title,
+            description: rewrittenFields.features?.[idx]?.description || f.description
+        }))
+    };
+};
+
+export const generateActionImages = async (product: ProductDetails, styles: AIImageStyle[] = ['lifestyle'], count: number = 1): Promise<string[]> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const generateSingleImage = async (style: AIImageStyle, index: number): Promise<string> => {
+        let stylePrompt = "";
+        switch (style) {
+            case 'lifestyle':
+                stylePrompt = "Includi un essere umano che interagisce con il prodotto in un contesto d'uso naturale e realistico.";
+                break;
+            case 'technical':
+                stylePrompt = "Uno schema tecnico professionale, un'immagine macro dettagliata delle componenti o un'esploso del prodotto in stile ingegneristico.";
+                break;
+            case 'informative':
+                stylePrompt = "Un'immagine informativa stile infografica che evidenzia i vantaggi principali del prodotto, con un look pulito ed educativo.";
+                break;
+        }
+
+        const parts: any[] = [
+            { text: `Genera un'immagine pubblicitaria professionale per il prodotto: ${product.name}. 
+            Descrizione: ${product.description}. 
+            STILE RICHIESTO: ${stylePrompt}
+            L'immagine deve essere in alta risoluzione, stile e-commerce premium, pronta per una landing page di vendita.` }
+        ];
+
+        if (product.images && product.images.length > 0) {
+            const refImg = product.images[0];
+            if (refImg.startsWith('data:')) {
+                const [mimeInfo, base64Data] = refImg.split(';base64,');
+                const mimeType = mimeInfo.replace('data:', '');
+                parts.push({
+                    inlineData: {
+                        data: base64Data,
+                        mimeType: mimeType
+                    }
+                });
+                parts[0].text += " Usa l'immagine fornita come riferimento visivo per l'aspetto del prodotto.";
+            }
+        }
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: { parts },
+            config: {
+                imageConfig: {
+                    aspectRatio: "1:1"
+                }
+            }
+        });
+
+        for (const part of response.candidates?.[0]?.content?.parts || []) {
+            if (part.inlineData) {
+                return `data:image/png;base64,${part.inlineData.data}`;
+            }
+        }
+        throw new Error("Impossibile generare l'immagine AI.");
+    };
+
+    const finalStyles = styles.length > 0 ? styles : ['lifestyle' as AIImageStyle];
+    const tasks = Array.from({ length: count }).map((_, idx) => generateSingleImage(finalStyles[idx % finalStyles.length], idx));
+    return Promise.all(tasks);
 };
